@@ -65,6 +65,8 @@ const Check = (p) => <Icon {...p} d={<polyline points="20 6 9 17 4 12"/>} />;
 const RotateCcw = (p) => <Icon {...p} d={<g><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></g>} />;
 const Upload = (p) => <Icon {...p} d={<g><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></g>} />;
 const Download = (p) => <Icon {...p} d={<g><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></g>} />;
+const Sparkles = (p) => <Icon {...p} d={<g><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></g>} />;
+const SettingsGear = (p) => <Icon {...p} d={<g><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></g>} />;
 
 const SEED_STORY = {
   id: "morning",
@@ -133,6 +135,7 @@ function normalizeSentence(sentence) {
 const SAVED_WORDS_KEY = "georgian-reader:saved-words";
 const STORIES_KEY = "georgian-reader:stories";
 const ARCHIVED_KEY = "georgian-reader:archived-story-ids";
+const API_KEY_KEY = "georgian-reader:claude-api-key";
 
 const storage = {
   get(key) {
@@ -143,6 +146,73 @@ const storage = {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
   },
 };
+
+const STORY_SYSTEM_PROMPT = `You are a Georgian language learning content generator.
+Output ONLY a single valid JSON object — no markdown, no code fences, no commentary, just raw JSON.
+
+The JSON must match this schema exactly:
+{
+  "id": "kebab-case-id",
+  "title": "Georgian title (Georgian script only)",
+  "titleEn": "English title",
+  "description": "One sentence English description",
+  "difficulty": "A2",
+  "sentences": [
+    {
+      "words": [{"word": "Georgian", "gloss": "English meaning (morphological note)"}],
+      "english": "Full English translation of the sentence",
+      "trailing": "."
+    }
+  ]
+}
+
+Critical rules:
+- Every "word" value must contain ONLY Georgian Unicode characters (ა–ჿ). No Latin letters, digits, punctuation, or spaces inside a word value.
+- Punctuation goes ONLY in "trailing" (e.g. ".", "?", "!") — never embedded inside a "word".
+- For a sentence with a mid-sentence comma separating two clauses, add "midPunctuation": {"afterIndex": N, "mark": ","} where N is the 0-based index of the last word of the first clause, and put the second clause words in "extraWords": [...] (same format as "words").
+- "trailing" must be a punctuation character only — no letters.
+- Aim for 8–12 sentences.
+- Glosses should be concise: base meaning plus a brief morphological note in parentheses, e.g. "goes (3sg present)".
+- Do NOT include a "source" field.`;
+
+function stripJsonFences(text) {
+  return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+}
+
+async function callClaude(apiKey, userMessage, systemPrompt, model = "claude-opus-4-6", maxTokens = 4096) {
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: userMessage }],
+  };
+  if (systemPrompt) body.system = systemPrompt;
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-allow-browser": "true",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+function sampleLearningWords(savedWords, n = 6) {
+  const learning = savedWords.filter((w) => w.status === "learning");
+  const shuffled = [...learning];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, n);
+}
 
 function downloadJson(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -171,6 +241,15 @@ function GeorgianReader() {
   const [importJson, setImportJson] = useState("");
   const [importError, setImportError] = useState(null);
   const [importSuccess, setImportSuccess] = useState(null);
+  const [claudeApiKey, setClaudeApiKey] = useState("");
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [generatePrompt, setGeneratePrompt] = useState("");
+  const [generateDifficulty, setGenerateDifficulty] = useState("A2");
+  const [generateLoading, setGenerateLoading] = useState(false);
+  const [generateError, setGenerateError] = useState(null);
+  const [generateSuccess, setGenerateSuccess] = useState(null);
+  const [sampledWords, setSampledWords] = useState([]);
+  const [keyTestState, setKeyTestState] = useState(null);
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -188,6 +267,8 @@ function GeorgianReader() {
     }
     const a = storage.get(ARCHIVED_KEY);
     if (Array.isArray(a)) setArchivedIds(a);
+    const k = storage.get(API_KEY_KEY);
+    if (typeof k === "string" && k) setClaudeApiKey(k);
   }, []);
 
   useEffect(() => {
@@ -221,6 +302,12 @@ function GeorgianReader() {
   const persistArchived = (updated) => {
     setArchivedIds(updated);
     storage.set(ARCHIVED_KEY, updated);
+  };
+
+  const persistApiKey = (key) => {
+    setClaudeApiKey(key);
+    setKeyTestState(null);
+    storage.set(API_KEY_KEY, key);
   };
 
   const saveWord = (word, gloss) => {
@@ -348,6 +435,51 @@ function GeorgianReader() {
     downloadJson(`georgian-reader-backup-${stamp}.json`, exportData);
   };
 
+  const handleTestKey = async () => {
+    if (!claudeApiKey.trim()) return;
+    setKeyTestState("testing");
+    try {
+      await callClaude(claudeApiKey, "Hi", null, "claude-haiku-4-5-20251001", 1);
+      setKeyTestState("ok");
+    } catch (e) {
+      setKeyTestState(e.message);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setGenerateError(null);
+    setGenerateSuccess(null);
+    if (!claudeApiKey.trim()) {
+      setGenerateError("add your Anthropic API key in Settings first");
+      return;
+    }
+    setGenerateLoading(true);
+    try {
+      let userMessage = generatePrompt.trim()
+        ? `Write a Georgian language learning story for level ${generateDifficulty}. ${generatePrompt.trim()}`
+        : `Write a Georgian language learning story for level ${generateDifficulty}. Choose a creative, culturally rich topic.`;
+      if (sampledWords.length > 0) {
+        userMessage += `\n\nTry to naturally incorporate some of these words the learner is studying: ${sampledWords.map((w) => `${w.word} (${w.gloss})`).join(", ")}.`;
+      }
+      const rawText = await callClaude(claudeApiKey, userMessage, STORY_SYSTEM_PROMPT);
+      let parsed;
+      try {
+        parsed = JSON.parse(stripJsonFences(rawText));
+      } catch (e) {
+        throw new Error("Claude returned invalid JSON. Please try again.");
+      }
+      const newStories = buildStoriesFromData(parsed, "generated");
+      persistStories([...stories, ...newStories]);
+      setGenerateSuccess(`generated: "${newStories[0].titleEn}"`);
+      setGeneratePrompt("");
+      setTimeout(() => { setShowGenerator(false); setGenerateSuccess(null); }, 1800);
+    } catch (e) {
+      setGenerateError(e.message);
+    } finally {
+      setGenerateLoading(false);
+    }
+  };
+
   const styles = {
     cream: "#f4ecdc", creamDark: "#ebe0c8",
     ink: "#2a1f17", inkSoft: "#5a4a3a",
@@ -377,7 +509,15 @@ function GeorgianReader() {
       <div style={{ position: "relative", maxWidth: "480px", margin: "0 auto", padding: "24px 20px 120px" }}>
         {view === "menu" && (
           <div>
-            <header style={{ textAlign: "center", marginBottom: "40px", marginTop: "20px" }}>
+            <header style={{ textAlign: "center", marginBottom: "40px", marginTop: "20px", position: "relative" }}>
+              <button onClick={() => setView("settings")} style={{
+                position: "absolute", top: 0, right: 0,
+                background: "transparent", border: "none",
+                color: styles.inkSoft, cursor: "pointer",
+                padding: "6px", display: "flex",
+              }} aria-label="settings">
+                <SettingsGear size={18} />
+              </button>
               <div style={{ fontSize: "11px", letterSpacing: "0.3em", textTransform: "uppercase", color: styles.gold, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, marginBottom: "12px" }}>
                 Read · წაიკითხე
               </div>
@@ -493,6 +633,118 @@ function GeorgianReader() {
                   {importError && (
                     <div style={{ fontSize: "12px", color: styles.wine, fontFamily: "'DM Sans', sans-serif", padding: "10px", background: "rgba(122, 31, 43, 0.08)", borderRadius: "2px" }}>
                       {importError}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={() => {
+                if (!showGenerator) {
+                  setSampledWords(sampleLearningWords(savedWords));
+                  setGenerateError(null);
+                  setGenerateSuccess(null);
+                }
+                setShowGenerator(!showGenerator);
+              }} style={{
+                background: showGenerator ? styles.wine : "transparent",
+                border: `1px dashed ${styles.wine}`, borderRadius: "2px",
+                padding: "20px", cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "13px",
+                color: showGenerator ? styles.cream : styles.wine,
+                letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                marginTop: "8px",
+              }}>
+                <Sparkles size={14} />
+                {showGenerator ? "close" : "generate story"}
+              </button>
+
+              {showGenerator && (
+                <div style={{
+                  background: "rgba(255, 252, 245, 0.6)",
+                  border: `1px solid ${styles.creamDark}`,
+                  borderRadius: "2px", padding: "20px",
+                  display: "flex", flexDirection: "column", gap: "12px",
+                }}>
+                  {!claudeApiKey.trim() && (
+                    <div style={{ fontSize: "12px", color: styles.wine, fontFamily: "'DM Sans', sans-serif", padding: "10px", background: "rgba(122, 31, 43, 0.08)", borderRadius: "2px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span>No API key set.</span>
+                      <button onClick={() => setView("settings")} style={{ background: "transparent", border: "none", color: styles.wine, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 600, padding: 0, textDecoration: "underline" }}>
+                        Open Settings
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <label style={{ fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, flexShrink: 0 }}>level</label>
+                    <select value={generateDifficulty} onChange={(e) => setGenerateDifficulty(e.target.value)} style={{
+                      background: "rgba(255, 252, 245, 0.8)",
+                      border: `1px solid ${styles.creamDark}`, borderRadius: "2px",
+                      padding: "8px 12px", fontFamily: "'DM Sans', sans-serif", fontSize: "13px",
+                      color: styles.ink, outline: "none", cursor: "pointer",
+                    }}>
+                      {["A1", "A2", "B1", "B2"].map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <textarea
+                    value={generatePrompt}
+                    onChange={(e) => setGeneratePrompt(e.target.value)}
+                    placeholder="describe the story you want… or leave blank for a surprise"
+                    rows={3}
+                    style={{
+                      background: "rgba(255, 252, 245, 0.8)",
+                      border: `1px solid ${styles.creamDark}`,
+                      borderRadius: "2px", padding: "12px",
+                      fontFamily: "'DM Sans', sans-serif", fontSize: "13px",
+                      color: styles.ink, outline: "none",
+                      resize: "vertical", minHeight: "80px",
+                    }}
+                  />
+                  {sampledWords.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span>words to weave in</span>
+                        <button onClick={() => setSampledWords(sampleLearningWords(savedWords))} style={{ background: "transparent", border: "none", color: styles.inkSoft, cursor: "pointer", padding: "2px", display: "flex" }} aria-label="reshuffle words">
+                          <RotateCcw size={12} />
+                        </button>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {sampledWords.map((w) => (
+                          <span key={w.word} style={{
+                            background: "rgba(184, 137, 58, 0.12)",
+                            border: `1px solid ${styles.gold}`,
+                            borderRadius: "2px", padding: "4px 10px",
+                            fontSize: "15px", color: styles.ink,
+                            fontFamily: "'Cormorant Garamond', serif", fontWeight: 500,
+                          }}>
+                            {w.word}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {sampledWords.length === 0 && savedWords.filter((w) => w.status === "learning").length === 0 && (
+                    <div style={{ fontSize: "12px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}>
+                      save words while reading to have them woven into generated stories
+                    </div>
+                  )}
+                  <button onClick={handleGenerate} disabled={generateLoading || !claudeApiKey.trim()} style={{
+                    background: styles.wine, color: styles.cream,
+                    border: `1px solid ${styles.wine}`, borderRadius: "2px",
+                    padding: "14px", cursor: (generateLoading || !claudeApiKey.trim()) ? "not-allowed" : "pointer",
+                    opacity: (generateLoading || !claudeApiKey.trim()) ? 0.5 : 1,
+                    fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                    letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                  }}>
+                    {generateLoading ? "generating…" : "generate"}
+                  </button>
+                  {generateSuccess && (
+                    <div style={{ fontSize: "12px", color: "#2a6e3f", fontFamily: "'DM Sans', sans-serif", padding: "10px", background: "rgba(42, 110, 63, 0.08)", borderRadius: "2px" }}>
+                      ✓ {generateSuccess}
+                    </div>
+                  )}
+                  {generateError && (
+                    <div style={{ fontSize: "12px", color: styles.wine, fontFamily: "'DM Sans', sans-serif", padding: "10px", background: "rgba(122, 31, 43, 0.08)", borderRadius: "2px" }}>
+                      {generateError}
                     </div>
                   )}
                 </div>
@@ -629,6 +881,56 @@ function GeorgianReader() {
                 )}
               </React.Fragment>
             )}
+          </div>
+        )}
+
+        {view === "settings" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", paddingTop: "8px" }}>
+              <button onClick={() => setView("menu")} style={{
+                background: "transparent", border: "none",
+                color: styles.inkSoft, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: "6px",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "13px", padding: "8px 0",
+              }}>
+                <ArrowLeft size={16} />
+                back
+              </button>
+            </div>
+            <h2 style={{ fontSize: "32px", fontWeight: 600, color: styles.wine, margin: "0 0 8px" }}>Settings</h2>
+            <div style={{ fontSize: "14px", fontStyle: "italic", color: styles.inkSoft, marginBottom: "32px" }}>claude api key</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ fontSize: "13px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6 }}>
+                Your API key is stored only in this browser's localStorage — never in source code, never sent anywhere except directly to api.anthropic.com.
+              </div>
+              <ApiKeyInput value={claudeApiKey} onChange={persistApiKey} styles={styles} />
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <button onClick={handleTestKey} disabled={!claudeApiKey.trim() || keyTestState === "testing"} style={{
+                  background: "transparent", color: styles.wine,
+                  border: `1px solid ${styles.wine}`, borderRadius: "2px",
+                  padding: "10px 16px",
+                  cursor: (!claudeApiKey.trim() || keyTestState === "testing") ? "not-allowed" : "pointer",
+                  opacity: !claudeApiKey.trim() ? 0.4 : 1,
+                  fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                  letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                  flexShrink: 0,
+                }}>
+                  {keyTestState === "testing" ? "testing…" : "test connection"}
+                </button>
+                {keyTestState && keyTestState !== "testing" && (
+                  <span style={{
+                    fontSize: "12px",
+                    color: keyTestState === "ok" ? "#2a6e3f" : styles.wine,
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}>
+                    {keyTestState === "ok" ? "✓ key is valid" : `✗ ${keyTestState}`}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "11px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6, borderTop: `1px solid ${styles.creamDark}`, paddingTop: "16px" }}>
+                Get a key at console.anthropic.com. Usage is billed to your Anthropic account. Consider setting a monthly spending limit in the Anthropic Console.
+              </div>
+            </div>
           </div>
         )}
 
@@ -840,6 +1142,36 @@ function WordCard({ word, styles, onToggleStatus, onRemove, muted = false }) {
           <Trash2 size={16} />
         </button>
       </div>
+    </div>
+  );
+}
+
+function ApiKeyInput({ value, onChange, styles }) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="sk-ant-..."
+        autoComplete="off"
+        spellCheck="false"
+        style={{
+          width: "100%", padding: "14px 44px 14px 14px",
+          background: "rgba(255, 252, 245, 0.8)",
+          border: `1px solid ${styles.creamDark}`, borderRadius: "2px",
+          fontFamily: "monospace", fontSize: "13px",
+          color: styles.ink, outline: "none",
+        }}
+      />
+      <button onClick={() => setShow(!show)} style={{
+        position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+        background: "transparent", border: "none",
+        color: styles.inkSoft, cursor: "pointer", padding: "4px", display: "flex",
+      }} aria-label={show ? "hide key" : "show key"}>
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
     </div>
   );
 }
