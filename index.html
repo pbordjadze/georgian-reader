@@ -545,11 +545,11 @@ function GeorgianReader() {
           <div>
             <header style={{ textAlign: "center", marginBottom: "40px", marginTop: "20px" }}>
               <div style={{ fontSize: "11px", letterSpacing: "0.3em", textTransform: "uppercase", color: styles.gold, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, marginBottom: "12px" }}>
-                Read · წაიკითხე
+                წაიკითხე
               </div>
               <h1 style={{ fontSize: "44px", fontWeight: 600, margin: 0, lineHeight: 1.05, color: styles.wine }}>ქართული</h1>
               <div style={{ width: "60px", height: "1px", background: styles.gold, margin: "16px auto" }} />
-              <p style={{ fontSize: "14px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", margin: 0 }}>tap a story to begin</p>
+              <p style={{ fontSize: "14px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", margin: 0 }}>ისტორიაზე დაჭირებით დაიწყე</p>
             </header>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -831,11 +831,11 @@ function GeorgianReader() {
           <div>
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: "32px", paddingTop: "8px" }}>
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.15em", color: styles.gold, fontWeight: 600 }}>
-                {learningWords.length} learning · {knownWords.length} known
+                {learningWords.length} სასწავლი · {knownWords.length} ნასწავლი
               </div>
             </div>
             <h2 style={{ fontSize: "32px", fontWeight: 600, color: styles.wine, margin: "0 0 8px" }}>შენახული სიტყვები</h2>
-            <div style={{ fontSize: "14px", fontStyle: "italic", color: styles.inkSoft, marginBottom: "32px" }}>saved words</div>
+            <div style={{ fontSize: "14px", fontStyle: "italic", color: styles.inkSoft, marginBottom: "32px" }}>სწავლა და შენახვა</div>
 
             {learningWords.length > 0 && (
               <button onClick={startFlashcards} style={{
@@ -847,19 +847,19 @@ function GeorgianReader() {
                 display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
                 marginBottom: "28px", width: "100%",
               }}>
-                study · {learningWords.length} cards
+                სწავლა · {learningWords.length} ბარათი
               </button>
             )}
 
             {savedWords.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", fontSize: "14px", border: `1px dashed ${styles.creamDark}`, borderRadius: "2px" }}>
-                tap a word while reading,<br />then save it to study later
+                სიტყვაზე დააჭირე წაკითხვისას,<br />შემდეგ შეინახე სასწავლად
               </div>
             ) : (
               <React.Fragment>
                 {learningWords.length > 0 && (
                   <div style={{ marginBottom: "32px" }}>
-                    <div style={{ fontSize: "10px", letterSpacing: "0.2em", textTransform: "uppercase", color: styles.gold, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, marginBottom: "12px" }}>learning</div>
+                    <div style={{ fontSize: "10px", letterSpacing: "0.2em", textTransform: "uppercase", color: styles.gold, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, marginBottom: "12px" }}>სასწავლი</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                       {learningWords.map((w) => (
                         <WordCard key={w.word + w.savedAt} word={w} styles={styles} onToggleStatus={() => toggleWordStatus(w.word)} onRemove={() => removeSavedWord(w.word)} />
@@ -877,7 +877,7 @@ function GeorgianReader() {
                       display: "flex", alignItems: "center", gap: "6px", padding: "8px 0", marginBottom: "8px",
                     }}>
                       {showKnown ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      known ({knownWords.length})
+                      ნასწავლი ({knownWords.length})
                     </button>
                     {showKnown && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -905,6 +905,54 @@ function GeorgianReader() {
             onMarkKnown={flashMarkKnown}
             onBack={() => setView("words")}
           />
+        )}
+
+        {view === "flashcards" && flashIdx < flashcards.length && (
+          <div style={{
+            position: "fixed", bottom: "60px", left: "50%", transform: "translateX(-50%)",
+            background: `linear-gradient(to top, ${styles.cream} 70%, transparent)`,
+            padding: "20px 20px 20px",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: "12px",
+            width: "100%", maxWidth: "480px",
+          }}>
+            {flashFlipped && (
+              <button onClick={flashMarkKnown} style={{
+                background: "transparent", color: styles.gold,
+                border: `1px solid ${styles.gold}`, borderRadius: "2px",
+                padding: "10px 20px", cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                display: "flex", alignItems: "center", gap: "6px",
+              }}>
+                <Check size={12} />
+                ვიცი
+              </button>
+            )}
+            <div style={{ display: "flex", justifyContent: "center", gap: "12px", width: "100%" }}>
+              <button onClick={flashPrev} disabled={flashIdx === 0} style={{
+                flex: 1, maxWidth: "120px",
+                background: "transparent", border: `1px solid ${styles.creamDark}`,
+                borderRadius: "2px", padding: "16px",
+                cursor: flashIdx === 0 ? "not-allowed" : "pointer",
+                opacity: flashIdx === 0 ? 0.4 : 1,
+                display: "flex", alignItems: "center", justifyContent: "center", color: styles.ink,
+              }}>
+                <ChevronLeft size={20} />
+              </button>
+              <button onClick={flashNext} style={{
+                flex: 1, maxWidth: "120px",
+                background: styles.wine, color: styles.cream,
+                border: `1px solid ${styles.wine}`, borderRadius: "2px",
+                padding: "16px", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {flashIdx === flashcards.length - 1
+                  ? <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 600, letterSpacing: "0.08em" }}>დასრულება</span>
+                  : <ChevronRight size={20} />
+                }
+              </button>
+            </div>
+          </div>
         )}
 
         {view === "settings" && (
@@ -964,20 +1012,19 @@ function GeorgianReader() {
           </div>
         )}
 
-        {(view === "menu" || view === "words" || view === "settings") && (
-          <nav style={{
+        <nav style={{
             position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
             width: "100%", maxWidth: "480px",
             background: styles.cream,
             borderTop: `1px solid ${styles.creamDark}`,
             display: "flex", justifyContent: "space-around", alignItems: "center",
-            padding: "10px 0 24px",
+            padding: "10px 0 16px",
             zIndex: 100,
           }}>
             {[
-              { id: "menu",     NavIcon: BookOpen,     label: "Stories"  },
-              { id: "words",    NavIcon: Library,      label: "Words"    },
-              { id: "settings", NavIcon: SettingsGear, label: "Settings" },
+              { id: "menu",     NavIcon: BookOpen,     label: "ისტორიები" },
+              { id: "words",    NavIcon: Library,      label: "სიტყვები"  },
+              { id: "settings", NavIcon: SettingsGear, label: "პარამეტრები" },
             ].map(({ id, NavIcon, label }) => (
               <button key={id} onClick={() => setView(id)} style={{
                 background: "transparent", border: "none", cursor: "pointer",
@@ -992,7 +1039,6 @@ function GeorgianReader() {
               </button>
             ))}
           </nav>
-        )}
 
         {view === "reader" && activeStory && (
           <div>
@@ -1004,7 +1050,7 @@ function GeorgianReader() {
                 fontFamily: "'DM Sans', sans-serif", fontSize: "13px", padding: "8px 0",
               }}>
                 <ArrowLeft size={16} />
-                stories
+                ისტორიები
               </button>
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.15em", color: styles.gold, fontWeight: 600 }}>
                 {sentenceIdx + 1} / {activeStory.sentences.length}
@@ -1078,7 +1124,7 @@ function GeorgianReader() {
                 fontWeight: 500,
               }}>
                 {showTranslation ? <EyeOff size={14} /> : <Eye size={14} />}
-                {showTranslation ? "hide" : "show"} translation
+                {showTranslation ? "თარგმანის დამალვა" : "თარგმანის ჩვენება"}
               </button>
             </div>
 
@@ -1120,7 +1166,7 @@ function GeorgianReader() {
                   display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                 }}>
                   {popupWordSaved ? <Bookmark size={12} /> : <BookmarkPlus size={12} />}
-                  {popupWordSaved ? "saved" : "save word"}
+                  {popupWordSaved ? "შენახულია" : "შენახვა"}
                 </button>
               </div>
             )}
@@ -1130,11 +1176,11 @@ function GeorgianReader() {
 
       {view === "reader" && activeStory && (
         <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0,
+          position: "fixed", bottom: "60px", left: "50%", transform: "translateX(-50%)",
           background: `linear-gradient(to top, ${styles.cream} 70%, transparent)`,
-          padding: "20px 20px calc(32px + env(safe-area-inset-bottom))",
+          padding: "20px 20px 20px",
           display: "flex", justifyContent: "center", gap: "16px",
-          maxWidth: "480px", margin: "0 auto",
+          width: "100%", maxWidth: "480px",
         }}>
           <button onClick={prevSentence} disabled={sentenceIdx === 0} style={{
             flex: 1, maxWidth: "120px",
@@ -1159,7 +1205,7 @@ function GeorgianReader() {
             color: styles.cream,
           }}>
             {sentenceIdx === activeStory.sentences.length - 1
-              ? <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", letterSpacing: "0.08em", fontWeight: 600 }}>done</span>
+              ? <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", letterSpacing: "0.08em", fontWeight: 600 }}>დასრულება</span>
               : <ChevronRight size={20} />
             }
           </button>
@@ -1183,11 +1229,11 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
           fontFamily: "'DM Sans', sans-serif", fontSize: "13px", padding: "8px 0",
         }}>
           <ArrowLeft size={16} />
-          back
+          უკან
         </button>
         {!isComplete && (
           <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.15em", color: styles.gold, fontWeight: 600 }}>
-            {idx + 1} of {cards.length}
+            {idx + 1} / {cards.length}
           </div>
         )}
       </div>
@@ -1198,9 +1244,6 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
           <div style={{ fontSize: "24px", fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "8px" }}>
             სწავლა დასრულდა
           </div>
-          <div style={{ fontSize: "14px", color: styles.inkSoft, fontStyle: "italic", fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "40px" }}>
-            session complete
-          </div>
           <button onClick={onBack} style={{
             background: styles.wine, color: styles.cream,
             border: `1px solid ${styles.wine}`, borderRadius: "2px",
@@ -1208,7 +1251,7 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
             fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
             letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
           }}>
-            back to words
+            სიტყვებზე დაბრუნება
           </button>
         </div>
       ) : (
@@ -1234,7 +1277,7 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
                   {card.word}
                 </div>
                 <div style={{ fontSize: "11px", color: styles.inkSoft, marginTop: "28px", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                  tap to reveal
+                  გადაბრუნება
                 </div>
               </div>
               {/* Back */}
@@ -1266,46 +1309,6 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
             </div>
           </div>
 
-          {flipped && (
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
-              <button onClick={onMarkKnown} style={{
-                background: "transparent", color: styles.gold,
-                border: `1px solid ${styles.gold}`, borderRadius: "2px",
-                padding: "10px 20px", cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
-                letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
-                display: "flex", alignItems: "center", gap: "6px",
-              }}>
-                <Check size={12} />
-                mark as known
-              </button>
-            </div>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-            <button onClick={onPrev} disabled={idx === 0} style={{
-              flex: 1, maxWidth: "120px",
-              background: "transparent", border: `1px solid ${styles.creamDark}`,
-              borderRadius: "2px", padding: "16px",
-              cursor: idx === 0 ? "not-allowed" : "pointer",
-              opacity: idx === 0 ? 0.4 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center", color: styles.ink,
-            }}>
-              <ChevronLeft size={20} />
-            </button>
-            <button onClick={onNext} style={{
-              flex: 1, maxWidth: "120px",
-              background: styles.wine, color: styles.cream,
-              border: `1px solid ${styles.wine}`, borderRadius: "2px",
-              padding: "16px", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {idx === cards.length - 1
-                ? <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 600, letterSpacing: "0.08em" }}>done</span>
-                : <ChevronRight size={20} />
-              }
-            </button>
-          </div>
         </React.Fragment>
       )}
     </div>
