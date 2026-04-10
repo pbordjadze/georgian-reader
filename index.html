@@ -16,11 +16,18 @@
     margin: 0;
     padding: 0;
     background: #f4ecdc;
+    height: 100%;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
   }
   body {
+    overflow: hidden;
     padding-top: env(safe-area-inset-top);
+  }
+  #root {
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   textarea, input { -webkit-user-select: text; user-select: text; }
   * { box-sizing: border-box; }
@@ -356,7 +363,7 @@ function GeorgianReader() {
 
   return (
     <div ref={containerRef} style={{
-      minHeight: "100vh",
+      minHeight: "100%",
       background: `radial-gradient(ellipse at top, ${styles.cream} 0%, ${styles.creamDark} 100%)`,
       fontFamily: "'Cormorant Garamond', Georgia, serif",
       color: styles.ink, padding: 0, position: "relative", overflow: "hidden",
