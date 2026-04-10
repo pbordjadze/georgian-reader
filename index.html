@@ -204,14 +204,18 @@ async function callClaude(apiKey, userMessage, systemPrompt, model = "claude-opu
   return data.content[0].text;
 }
 
+function shuffleArray(arr) {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 function sampleLearningWords(savedWords, n = 6) {
   const learning = savedWords.filter((w) => w.status === "learning");
-  const shuffled = [...learning];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled.slice(0, n);
+  return shuffleArray(learning).slice(0, n);
 }
 
 function downloadJson(filename, data) {
@@ -250,6 +254,9 @@ function GeorgianReader() {
   const [generateSuccess, setGenerateSuccess] = useState(null);
   const [sampledWords, setSampledWords] = useState([]);
   const [keyTestState, setKeyTestState] = useState(null);
+  const [flashcards, setFlashcards] = useState([]);
+  const [flashIdx, setFlashIdx] = useState(0);
+  const [flashFlipped, setFlashFlipped] = useState(false);
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -334,6 +341,32 @@ function GeorgianReader() {
     persistWords(savedWords.map((w) =>
       w.word === word ? { ...w, status: w.status === "known" ? "learning" : "known" } : w
     ));
+  };
+
+  const startFlashcards = () => {
+    setFlashcards(shuffleArray(learningWords));
+    setFlashIdx(0);
+    setFlashFlipped(false);
+    setView("flashcards");
+  };
+
+  const flashNext = () => {
+    setFlashFlipped(false);
+    setFlashIdx((i) => i + 1);
+  };
+
+  const flashPrev = () => {
+    setFlashFlipped(false);
+    setFlashIdx((i) => Math.max(0, i - 1));
+  };
+
+  const flashMarkKnown = () => {
+    const card = flashcards[flashIdx];
+    if (card) {
+      toggleWordStatus(card.word);
+      setFlashFlipped(false);
+      setFlashIdx((i) => i + 1);
+    }
   };
 
   const toggleArchive = (storyId) => {
@@ -842,6 +875,20 @@ function GeorgianReader() {
             <h2 style={{ fontSize: "32px", fontWeight: 600, color: styles.wine, margin: "0 0 8px" }}>შენახული სიტყვები</h2>
             <div style={{ fontSize: "14px", fontStyle: "italic", color: styles.inkSoft, marginBottom: "32px" }}>saved words</div>
 
+            {learningWords.length > 0 && (
+              <button onClick={startFlashcards} style={{
+                background: styles.wine, color: styles.cream,
+                border: `1px solid ${styles.wine}`, borderRadius: "2px",
+                padding: "14px 20px", cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                marginBottom: "28px", width: "100%",
+              }}>
+                study · {learningWords.length} cards
+              </button>
+            )}
+
             {savedWords.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: styles.inkSoft, fontFamily: "'DM Sans', sans-serif", fontSize: "14px", border: `1px dashed ${styles.creamDark}`, borderRadius: "2px" }}>
                 tap a word while reading,<br />then save it to study later
@@ -882,6 +929,20 @@ function GeorgianReader() {
               </React.Fragment>
             )}
           </div>
+        )}
+
+        {view === "flashcards" && (
+          <FlashcardView
+            cards={flashcards}
+            idx={flashIdx}
+            flipped={flashFlipped}
+            styles={styles}
+            onFlip={() => setFlashFlipped((f) => !f)}
+            onNext={flashNext}
+            onPrev={flashPrev}
+            onMarkKnown={flashMarkKnown}
+            onBack={() => setView("words")}
+          />
         )}
 
         {view === "settings" && (
@@ -1104,6 +1165,149 @@ function GeorgianReader() {
             }
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, onMarkKnown, onBack }) {
+  const card = cards[idx];
+  const isComplete = idx >= cards.length;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", paddingTop: "8px" }}>
+        <button onClick={onBack} style={{
+          background: "transparent", border: "none",
+          color: styles.inkSoft, cursor: "pointer",
+          display: "flex", alignItems: "center", gap: "6px",
+          fontFamily: "'DM Sans', sans-serif", fontSize: "13px", padding: "8px 0",
+        }}>
+          <ArrowLeft size={16} />
+          back
+        </button>
+        {!isComplete && (
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.15em", color: styles.gold, fontWeight: 600 }}>
+            {idx + 1} of {cards.length}
+          </div>
+        )}
+      </div>
+
+      {isComplete ? (
+        <div style={{ textAlign: "center", paddingTop: "80px" }}>
+          <div style={{ fontSize: "48px", marginBottom: "24px", color: styles.gold }}>✓</div>
+          <div style={{ fontSize: "24px", fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "8px" }}>
+            სწავლა დასრულდა
+          </div>
+          <div style={{ fontSize: "14px", color: styles.inkSoft, fontStyle: "italic", fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "40px" }}>
+            session complete
+          </div>
+          <button onClick={onBack} style={{
+            background: styles.wine, color: styles.cream,
+            border: `1px solid ${styles.wine}`, borderRadius: "2px",
+            padding: "14px 28px", cursor: "pointer",
+            fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+            letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+          }}>
+            back to words
+          </button>
+        </div>
+      ) : (
+        <React.Fragment>
+          <div onClick={onFlip} style={{ perspective: "1000px", cursor: "pointer", marginBottom: "24px" }}>
+            <div style={{
+              position: "relative", minHeight: "280px",
+              transformStyle: "preserve-3d",
+              transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+              transition: "transform 0.45s ease",
+            }}>
+              {/* Front */}
+              <div style={{
+                position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden",
+                background: "rgba(255, 252, 245, 0.7)",
+                border: `1px solid ${styles.creamDark}`, borderRadius: "2px",
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                padding: "40px 32px",
+              }}>
+                <div style={{ fontSize: "52px", fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", textAlign: "center" }}>
+                  {card.word}
+                </div>
+                <div style={{ fontSize: "11px", color: styles.inkSoft, marginTop: "28px", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                  tap to reveal
+                </div>
+              </div>
+              {/* Back */}
+              <div style={{
+                position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden",
+                transform: "rotateY(180deg)",
+                background: "rgba(255, 252, 245, 0.7)",
+                border: `1px solid ${styles.creamDark}`, borderRadius: "2px",
+                padding: "28px 32px",
+                display: "flex", flexDirection: "column", justifyContent: "center",
+              }}>
+                <div style={{ fontSize: "36px", fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "10px" }}>
+                  {card.word}
+                </div>
+                <div style={{ fontSize: "15px", color: styles.ink, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5, marginBottom: "16px" }}>
+                  {card.gloss}
+                </div>
+                {card.sentenceContext && (
+                  <div style={{
+                    fontSize: "13px", color: styles.inkSoft, fontStyle: "italic",
+                    fontFamily: "'Cormorant Garamond', Georgia, serif",
+                    borderLeft: `2px solid ${styles.gold}`, paddingLeft: "12px", lineHeight: 1.6,
+                  }}>
+                    {card.sentenceContext}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {flipped && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
+              <button onClick={onMarkKnown} style={{
+                background: "transparent", color: styles.gold,
+                border: `1px solid ${styles.gold}`, borderRadius: "2px",
+                padding: "10px 20px", cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                display: "flex", alignItems: "center", gap: "6px",
+              }}>
+                <Check size={12} />
+                mark as known
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
+            <button onClick={onPrev} disabled={idx === 0} style={{
+              flex: 1, maxWidth: "120px",
+              background: "transparent", border: `1px solid ${styles.creamDark}`,
+              borderRadius: "2px", padding: "16px",
+              cursor: idx === 0 ? "not-allowed" : "pointer",
+              opacity: idx === 0 ? 0.4 : 1,
+              display: "flex", alignItems: "center", justifyContent: "center", color: styles.ink,
+            }}>
+              <ChevronLeft size={20} />
+            </button>
+            <button onClick={onNext} style={{
+              flex: 1, maxWidth: "120px",
+              background: styles.wine, color: styles.cream,
+              border: `1px solid ${styles.wine}`, borderRadius: "2px",
+              padding: "16px", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {idx === cards.length - 1
+                ? <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 600, letterSpacing: "0.08em" }}>done</span>
+                : <ChevronRight size={20} />
+              }
+            </button>
+          </div>
+        </React.Fragment>
       )}
     </div>
   );
