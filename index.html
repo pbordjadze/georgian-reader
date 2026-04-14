@@ -137,6 +137,7 @@ const SAVED_WORDS_KEY = "georgian-reader:saved-words";
 const STORIES_KEY = "georgian-reader:stories";
 const ARCHIVED_KEY = "georgian-reader:archived-story-ids";
 const API_KEY_KEY = "georgian-reader:claude-api-key";
+const SESSION_SIZE_KEY = "georgian-reader:session-size";
 
 const storage = {
   get(key) {
@@ -258,6 +259,7 @@ function GeorgianReader() {
   const [flashcards, setFlashcards] = useState([]);
   const [flashIdx, setFlashIdx] = useState(0);
   const [flashFlipped, setFlashFlipped] = useState(false);
+  const [sessionSize, setSessionSize] = useState(15);
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -277,6 +279,8 @@ function GeorgianReader() {
     if (Array.isArray(a)) setArchivedIds(a);
     const k = storage.get(API_KEY_KEY);
     if (typeof k === "string" && k) setClaudeApiKey(k);
+    const sz = storage.get(SESSION_SIZE_KEY);
+    if (typeof sz === "number" && sz >= 1) setSessionSize(sz);
   }, []);
 
   useEffect(() => {
@@ -344,8 +348,13 @@ function GeorgianReader() {
     ));
   };
 
+  const persistSessionSize = (n) => {
+    setSessionSize(n);
+    storage.set(SESSION_SIZE_KEY, n);
+  };
+
   const startFlashcards = () => {
-    setFlashcards(shuffleArray(learningWords));
+    setFlashcards(shuffleArray(learningWords).slice(0, sessionSize));
     setFlashIdx(0);
     setFlashFlipped(false);
     setView("flashcards");
@@ -362,12 +371,8 @@ function GeorgianReader() {
   };
 
   const flashMarkKnown = () => {
-    const card = flashcards[flashIdx];
-    if (card) {
-      toggleWordStatus(card.word);
-      setFlashFlipped(false);
-      setFlashIdx((i) => i + 1);
-    }
+    setFlashcards(prev => prev.filter((_, i) => i !== flashIdx));
+    setFlashFlipped(false);
   };
 
   const toggleArchive = (storyId) => {
@@ -838,17 +843,39 @@ function GeorgianReader() {
             <div style={{ fontSize: "14px", fontStyle: "italic", color: styles.inkSoft, marginBottom: "32px" }}>სწავლა და შენახვა</div>
 
             {learningWords.length > 0 && (
-              <button onClick={startFlashcards} style={{
-                background: styles.wine, color: styles.cream,
-                border: `1px solid ${styles.wine}`, borderRadius: "2px",
-                padding: "14px 20px", cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
-                letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                marginBottom: "28px", width: "100%",
-              }}>
-                სწავლა · {learningWords.length} ბარათი
-              </button>
+              <div style={{ marginBottom: "28px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginBottom: "12px" }}>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: styles.inkSoft, fontWeight: 600 }}>
+                    სესიაში
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <button onClick={() => persistSessionSize(Math.max(1, sessionSize - 5))} style={{
+                      background: "transparent", border: `1px solid ${styles.creamDark}`, borderRadius: "2px",
+                      width: "28px", height: "28px", cursor: "pointer", color: styles.inkSoft,
+                      fontFamily: "'DM Sans', sans-serif", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>−</button>
+                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 600, color: styles.ink, minWidth: "28px", textAlign: "center" }}>
+                      {Math.min(sessionSize, learningWords.length)}
+                    </span>
+                    <button onClick={() => persistSessionSize(Math.min(learningWords.length, sessionSize + 5))} style={{
+                      background: "transparent", border: `1px solid ${styles.creamDark}`, borderRadius: "2px",
+                      width: "28px", height: "28px", cursor: "pointer", color: styles.inkSoft,
+                      fontFamily: "'DM Sans', sans-serif", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>+</button>
+                  </div>
+                </div>
+                <button onClick={startFlashcards} style={{
+                  background: styles.wine, color: styles.cream,
+                  border: `1px solid ${styles.wine}`, borderRadius: "2px",
+                  padding: "14px 20px", cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                  letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  width: "100%",
+                }}>
+                  სწავლა · {Math.min(sessionSize, learningWords.length)} ბარათი
+                </button>
+              </div>
             )}
 
             {savedWords.length === 0 ? (
@@ -1215,6 +1242,14 @@ function GeorgianReader() {
   );
 }
 
+function cardFontSize(word, base) {
+  const len = word ? word.length : 0;
+  if (len <= 8)  return base + "px";
+  if (len <= 11) return Math.round(base * 0.77) + "px";
+  if (len <= 15) return Math.round(base * 0.58) + "px";
+  return Math.round(base * 0.42) + "px";
+}
+
 function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, onMarkKnown, onBack }) {
   const card = cards[idx];
   const isComplete = idx >= cards.length;
@@ -1273,7 +1308,7 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
                 alignItems: "center", justifyContent: "center",
                 padding: "40px 32px",
               }}>
-                <div style={{ fontSize: "52px", fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", textAlign: "center" }}>
+                <div style={{ fontSize: cardFontSize(card.word, 52), fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", textAlign: "center", wordBreak: "break-word" }}>
                   {card.word}
                 </div>
                 <div style={{ fontSize: "11px", color: styles.inkSoft, marginTop: "28px", fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.12em", textTransform: "uppercase" }}>
@@ -1290,7 +1325,7 @@ function FlashcardView({ cards, idx, flipped, styles, onFlip, onNext, onPrev, on
                 padding: "28px 32px",
                 display: "flex", flexDirection: "column", justifyContent: "center",
               }}>
-                <div style={{ fontSize: "36px", fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "10px" }}>
+                <div style={{ fontSize: cardFontSize(card.word, 36), fontWeight: 600, color: styles.wine, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: "10px", wordBreak: "break-word" }}>
                   {card.word}
                 </div>
                 <div style={{ fontSize: "15px", color: styles.ink, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5, marginBottom: "16px" }}>
